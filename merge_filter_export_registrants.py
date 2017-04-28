@@ -5,6 +5,23 @@ import os
 import csv
 import xml.etree.ElementTree as ET
 
+# set up function to make list unique and keep order
+def unique_list(seq, idfun=None): 
+   # order preserving
+   if idfun is None:
+       def idfun(x): return x
+   seen = {}
+   result = []
+   for item in seq:
+       marker = idfun(item)
+       # in old Python versions:
+       # if seen.has_key(marker)
+       # but in new ones:
+       if marker in seen: continue
+       seen[marker] = 1
+       result.append(item)
+   return result
+
 # set up function to get xml files you want to use
 def get_filepaths(directory):
 	# got this function from here http://stackoverflow.com/questions/3207219/how-to-list-all-files-of-a-directory
@@ -81,6 +98,7 @@ for filing in all_filings:
 # set up data that should go in csv
 filing_dicts = []
 longest_issues = [0,0]
+all_issues = []
 
 # from each filing in filtered root, gets data from tree that we want to place in csv
 	# note how different variables require parsing data tree in different ways
@@ -98,14 +116,21 @@ for ind1, filing in enumerate(root.findall("./Filing")):
 	d["client_contact_full_name"] = filing.find("Client").attrib["ContactFullname"]
 	# loop takes all issues in one filing and creates new columns for them in csv
 	for ind2, issue in enumerate(filing.findall("Issues/Issue")):
+		# populates list of all issues mentioned
+		if len(all_issues) == 0 or issue.attrib["Code"] not in all_issues:
+			all_issues.append(issue.attrib["Code"])
+			# print(len(all_issues))
 		if ind2>longest_issues[0]:
 			# if this filing has the most issues, it puts the indicies into longest_issues
 			longest_issues = [ind2, ind1]
 		issue_code_number = "issue_code_" + str(ind2)
 		issue_specific_number = "issue_specific_" + str(ind2)
 		d[issue_code_number] = issue.attrib["Code"]
-		d[issue_specific_number] = issue.attrib["SpecificIssue"]
+		d[issue_specific_number] = issue.attrib["SpecificIssue"]	
+		d[issue.attrib["Code"]] = "Y"
+	# marks issue if included in this filing
 	filing_dicts.append(d)
+
 
 
 # names csv file to write to
@@ -114,7 +139,8 @@ out_file_name = "2017_REGISTRATION_AND_REG_AMENDMENTS.csv"
 
 #writes csv file 
 with open(out_file_name, "w") as csvfile:	
-	fieldnames = filing_dicts[longest_issues[1]].keys()
+	fieldnames = list(filing_dicts[longest_issues[1]].keys()) + all_issues
+	fieldnames = unique_list(fieldnames)
 	writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
 	writer.writeheader()
 	for filing in filing_dicts:
